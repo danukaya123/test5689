@@ -1,0 +1,25 @@
+{
+  "functions": {
+    "api/stream.js": {
+      "maxDuration": 300,
+      "memory": 3008
+    },
+    "api/proxy.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Range" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/api/ping" }
+  ]
+}
