@@ -1,4 +1,4 @@
-// api/stream.js
+// api/stream.js - Vercel Streaming API
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
     
     // Set headers for streaming
