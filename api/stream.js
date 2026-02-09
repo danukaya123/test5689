@@ -1,145 +1,99 @@
-// api/stream.js - COMPLETE FIXED VERSION
+// api/stream.js — WHATSAPP SAFE DIRECT STREAM
 export default async function handler(req, res) {
-  // IMPORTANT: Set headers FIRST
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Accept');
-  
-  if (req.method === 'OPTIONS') {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Range");
+
+  if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
-  
+
+  const { url, filename = "video.mp4" } = req.query;
+  if (!url) {
+    return res.status(400).json({ error: "Missing url param" });
+  }
+
+  const targetUrl = decodeURIComponent(url);
+  console.log("[STREAM] Target:", targetUrl);
+
   try {
-    const { url, filename = 'movie.mp4' } = req.query;
-    
-    if (!url) {
-      return res.status(400).json({ error: 'URL parameter is required' });
-    }
-    
-    const targetUrl = decodeURIComponent(url);
-    console.log(`[VERCEL] Streaming: ${filename} from ${targetUrl.substring(0, 50)}...`);
-    
-    // Handle HEAD request (WhatsApp checks this)
-    if (req.method === 'HEAD') {
-      console.log(`[VERCEL] HEAD request received`);
-      
-      try {
-        // Try to get file info from pixeldrain
-        const response = await fetch(targetUrl, { 
-          method: 'HEAD',
-          headers: {
-            'User-Agent': 'Mozilla/5.0',
-            'Accept': '*/*'
-          }
-        });
-        
-        // Set response headers
-        res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp4');
-        res.setHeader('Content-Length', response.headers.get('content-length') || '1000000');
-        res.setHeader('Accept-Ranges', 'bytes');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        
-        return res.status(200).end();
-        
-      } catch (headError) {
-        console.error('[VERCEL] HEAD error:', headError.message);
-        // Return default headers if HEAD fails
-        res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Content-Length', '100000000'); // 100MB default
-        return res.status(200).end();
-      }
-    }
-    
-    // ========== ACTUAL STREAMING ==========
-    console.log(`[VERCEL] Starting stream for: ${filename}`);
-    
-    let response;
-    try {
-      // Fetch with proper headers
-      response = await fetch(targetUrl, {
+    /* ================= HEAD REQUEST ================= */
+    if (req.method === "HEAD") {
+      const head = await fetch(targetUrl, {
+        method: "HEAD",
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'video/mp4,application/octet-stream,*/*;q=0.8',
-          'Referer': 'https://whatsapp.com/'
+          "User-Agent": "WhatsApp/2.24.2 Android",
+          "Accept": "*/*",
+          "Referer": "https://pixeldrain.com"
         }
       });
-      
-      if (!response.ok) {
-        throw new Error(`Source returned ${response.status}: ${response.statusText}`);
+
+      res.setHeader(
+        "Content-Type",
+        head.headers.get("content-type") || "video/mp4"
+      );
+      res.setHeader(
+        "Content-Length",
+        head.headers.get("content-length") || "0"
+      );
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+
+      return res.status(200).end();
+    }
+
+    /* ================= GET REQUEST ================= */
+    const response = await fetch(targetUrl, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": "WhatsApp/2.24.2 Android",
+        "Accept": "application/octet-stream",
+        "Referer": "https://pixeldrain.com"
       }
-      
-    } catch (fetchError) {
-      console.error('[VERCEL] Fetch error:', fetchError.message);
-      return res.status(502).json({ error: `Cannot fetch source: ${fetchError.message}` });
+    });
+
+    if (!response.ok) {
+      throw new Error(`Source error ${response.status}`);
     }
-    
-    // Get content info
-    const contentType = response.headers.get('content-type') || 'video/mp4';
-    const contentLength = response.headers.get('content-length') || '0';
-    
-    console.log(`[VERCEL] Response: ${response.status}, Type: ${contentType}, Size: ${contentLength}`);
-    
-    // Set FINAL headers (MUST be set before writing)
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Accept-Ranges', 'bytes');
-    
-    // Set Content-Length if available
-    if (contentLength && contentLength !== '0') {
-      res.setHeader('Content-Length', contentLength);
+
+    const contentType = response.headers.get("content-type") || "";
+    const contentLength = response.headers.get("content-length");
+
+    /* 🚫 BLOCK HTML (dummy file fix) */
+    if (contentType.includes("text/html")) {
+      console.error("[STREAM] HTML response blocked");
+      return res.status(400).json({
+        error: "HTML page received instead of file"
+      });
     }
-    
-    // ========== STREAM THE DATA ==========
+
+    res.setHeader("Content-Type", contentType);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    /* ================= STREAM ================= */
     const reader = response.body.getReader();
-    let bytesStreamed = 0;
-    
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) {
-          console.log(`[VERCEL] Stream complete. Total: ${bytesStreamed} bytes`);
-          break;
-        }
-        
-        bytesStreamed += value.length;
-        
-        // Write chunk to response
-        const writeSuccess = res.write(value);
-        
-        // Log progress every 5MB
-        if (bytesStreamed % (5 * 1024 * 1024) < value.length) {
-          console.log(`[VERCEL] Streamed: ${(bytesStreamed / 1024 / 1024).toFixed(2)}MB`);
-        }
-        
-        // Handle backpressure
-        if (!writeSuccess) {
-          await new Promise(resolve => {
-            res.once('drain', resolve);
-          });
-        }
-      }
-      
-      // End the response
-      res.end();
-      
-    } catch (streamError) {
-      console.error('[VERCEL] Stream error:', streamError.message);
-      // Don't try to send error if headers already sent
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Streaming failed' });
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!res.write(value)) {
+        await new Promise(r => res.once("drain", r));
       }
     }
-    
-  } catch (error) {
-    console.error('[VERCEL] Fatal error:', error.message);
-    
+
+    res.end();
+    console.log("[STREAM] Completed");
+
+  } catch (err) {
+    console.error("[STREAM] ERROR:", err.message);
     if (!res.headersSent) {
-      res.status(500).json({ 
-        error: 'Internal server error',
-        message: error.message 
-      });
+      res.status(500).json({ error: err.message });
     }
   }
 }
