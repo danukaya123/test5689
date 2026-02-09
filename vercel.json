@@ -4,9 +4,9 @@
       "maxDuration": 300,
       "memory": 2048
     },
-    "api/proxy.js": {
-      "maxDuration": 30,
-      "memory": 1024
+    "api/ping.js": {
+      "maxDuration": 10,
+      "memory": 128
     }
   },
   "headers": [
@@ -15,11 +15,20 @@
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Range" }
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Range, Accept, Referer, User-Agent" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Powered-By", "value": "DANUWA-MD Vercel Streaming" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/", "destination": "/api/ping" }
+    { "source": "/", "destination": "/api/ping" },
+    { "source": "/api", "destination": "/api/ping" },
+    { "source": "/api/", "destination": "/api/ping" }
   ]
 }
