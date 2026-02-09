@@ -1,4 +1,3 @@
-// api/stream.js - DIRECT WhatsApp Streaming
 export default async function handler(req, res) {
   // Set CORS for WhatsApp
   res.setHeader('Access-Control-Allow-Origin', '*');
