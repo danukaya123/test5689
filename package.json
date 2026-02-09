@@ -1,0 +1,14 @@
+{
+  "name": "danuwa-vercel-stream",
+  "version": "1.0.0",
+  "description": "Vercel serverless API for DANUWA-MD movie streaming",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=20.x"
+  },
+  "license": "MIT"
+}
