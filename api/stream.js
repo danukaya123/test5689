@@ -1,9 +1,9 @@
+// api/stream.js - UPDATED
 export default async function handler(req, res) {
-  // Set CORS for WhatsApp
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Accept');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -17,29 +17,34 @@ export default async function handler(req, res) {
     }
     
     const targetUrl = decodeURIComponent(url);
-    console.log(`[VERCEL] Direct streaming: ${filename}`);
     
-    // Get file info first
-    const headResponse = await fetch(targetUrl, { method: 'HEAD' });
-    const contentLength = headResponse.headers.get('content-length');
-    const contentType = headResponse.headers.get('content-type') || 'video/mp4';
+    // Handle HEAD request (Baileys checks this first)
+    if (req.method === 'HEAD') {
+      console.log(`[VERCEL] HEAD request for: ${filename}`);
+      
+      const headResponse = await fetch(targetUrl, { method: 'HEAD' });
+      
+      res.setHeader('Content-Type', headResponse.headers.get('content-type') || 'video/mp4');
+      res.setHeader('Content-Length', headResponse.headers.get('content-length') || '0');
+      res.setHeader('Accept-Ranges', 'bytes');
+      
+      return res.status(200).end();
+    }
     
-    // WhatsApp REQUIRES these headers
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', contentLength);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // Handle GET request (actual streaming)
+    console.log(`[VERCEL] GET streaming: ${filename}`);
+    
+    const response = await fetch(targetUrl);
+    
+    // Forward headers
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp4');
+    res.setHeader('Content-Length', response.headers.get('content-length') || '0');
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     
-    // CRITICAL: These headers make WhatsApp download directly
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
+    // Stream the response
+    const reader = response.body.getReader();
     
-    // Stream directly from source to WhatsApp
-    const sourceResponse = await fetch(targetUrl);
-    const reader = sourceResponse.body.getReader();
-    
-    // Pipe stream directly
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
